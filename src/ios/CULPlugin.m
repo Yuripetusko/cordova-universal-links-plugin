@@ -53,15 +53,33 @@
 - (BOOL)handleUserActivity:(NSUserActivity *)userActivity {
     [self localInit];
     
-    NSURL *launchURL = userActivity.webpageURL;
-    CULHost *host = [self findHostByURL:launchURL];
-    if (host == nil) {
-        return NO;
+    NSURL *encodedURL = userActivity.webpageURL;
+
+    if (encodedURL == nil) {
+        NSLog(@"Unable to handle user activity: No URL provided");
+        return false;
     }
-    
-    [self storeEventWithHost:host originalURL:launchURL];
+
+    NSURLSession *session = [NSURLSession sharedSession];
+    NSURLSessionDataTask *task = [session dataTaskWithURL:encodedURL completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        if (response == nil || [response URL] == nil) {
+            NSLog(@"Unable to handle URL: %@", encodedURL.absoluteString);
+            return;
+        }
+        // Now you have the resolved URL that you can
+        // use to navigate somewhere in the app.
+        NSURL *resolvedURL = [response URL];
+        CULHost *host = [self findHostByURL:encodedURL];
+        if (host == nil) {
+            return;
+        }
+        [self storeEventWithHost:host originalURL:resolvedURL];
+        
+    }];
+    [task resume];
     
     return YES;
+   
 }
 
 - (void)onAppTerminate {
@@ -116,6 +134,7 @@
 - (CULHost *)findHostByURL:(NSURL *)launchURL {
     NSURLComponents *urlComponents = [NSURLComponents componentsWithURL:launchURL resolvingAgainstBaseURL:YES];
     CULHost *host = nil;
+    
     for (CULHost *supportedHost in _supportedHosts) {
         NSPredicate *pred = [NSPredicate predicateWithFormat:@"self LIKE[c] %@", supportedHost.name];
         if ([pred evaluateWithObject:urlComponents.host]) {

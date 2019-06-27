@@ -2,8 +2,12 @@ package com.nordnetab.cordova.ul;
 
 import android.content.Intent;
 import android.net.Uri;
+import java.net.URL;
+import java.net.HttpURLConnection;
 import android.text.TextUtils;
 import android.util.Log;
+import java.net.MalformedURLException;
+import java.io.IOException;
 
 import com.nordnetab.cordova.ul.js.JSAction;
 import com.nordnetab.cordova.ul.model.JSMessage;
@@ -149,6 +153,12 @@ public class UniversalLinksPlugin extends CordovaPlugin {
         }
     }
 
+    private Uri.Builder builder;
+
+    public Uri getUriFromUrl(URL url) {
+        return Uri.parse(url.toString());
+    }
+
     /**
      * Send message to JS side.
      *
@@ -178,23 +188,44 @@ public class UniversalLinksPlugin extends CordovaPlugin {
 
         // read intent
         String action = intent.getAction();
-        Uri launchUri = intent.getData();
+        final String encodedURL = intent.getDataString();
 
         // if app was not launched by the url - ignore
-        if (!Intent.ACTION_VIEW.equals(action) || launchUri == null) {
+        if (!Intent.ACTION_VIEW.equals(action) || encodedURL == null) {
             return;
         }
+
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    URL originalURL = new URL(encodedURL);
+                    HttpURLConnection ucon = (HttpURLConnection) originalURL.openConnection();
+                    ucon.setInstanceFollowRedirects(false);
+                    URL resolvedURL = new URL(ucon.getHeaderField("Location"));
+                    Uri launchUri = getUriFromUrl(resolvedURL);
+
+                    ULHost host = findHostByUrl(launchUri);
+                    if (host == null) {
+                        Log.d("UniversalLinks", "Host " + launchUri.getHost() + " is not supported");
+                        return;
+                    }
+
+                    // store message and try to consume it
+                    storedMessage = new JSMessage(host, launchUri);
+                    tryToConsumeEvent();
+                }
+                catch (MalformedURLException ex) {
+                    Log.e("App Link",Log.getStackTraceString(ex));
+                }
+                catch (IOException ex) {
+                    Log.e("App Link",Log.getStackTraceString(ex));
+                }
+            }
+        }).start();
+
 
         // try to find host in the hosts list from the config.xml
-        ULHost host = findHostByUrl(launchUri);
-        if (host == null) {
-            Log.d("UniversalLinks", "Host " + launchUri.getHost() + " is not supported");
-            return;
-        }
-
-        // store message and try to consume it
-        storedMessage = new JSMessage(host, launchUri);
-        tryToConsumeEvent();
+        
     }
 
     /**
