@@ -63,8 +63,7 @@ function activateAssociativeDomains(xcodeProject) {
 
     // if deployment target is less then the required one - increase it
     if (buildSettings['IPHONEOS_DEPLOYMENT_TARGET']) {
-      var buildDeploymentTarget = buildSettings['IPHONEOS_DEPLOYMENT_TARGET'].toString();
-      if (compare(buildDeploymentTarget, IOS_DEPLOYMENT_TARGET) == -1) {
+      if (compare(buildSettings['IPHONEOS_DEPLOYMENT_TARGET'], IOS_DEPLOYMENT_TARGET) == -1) {
         buildSettings['IPHONEOS_DEPLOYMENT_TARGET'] = IOS_DEPLOYMENT_TARGET;
         deploymentTargetIsUpdated = true;
       }
@@ -136,25 +135,54 @@ function isPbxReferenceAlreadySet(fileReferenceSection, entitlementsRelativeFile
 function loadProjectFile() {
   var platform_ios;
   var projectFile;
+  
   try {
-    // try pre-5.0 cordova structure
-    platform_ios = context.requireCordovaModule('cordova-lib/src/plugman/platforms')['ios'];
-    projectFile = platform_ios.parseProjectFile(iosPlatformPath());
+      // try pre-5.0 cordova structure
+      platform_ios = context.requireCordovaModule('cordova-lib/src/plugman/platforms')['ios'];
+      projectFile = platform_ios.parseProjectFile(iosPlatformPath());
   } catch (e) {
-    try {
-      // let's try cordova 5.0 structure
-      platform_ios = context.requireCordovaModule('cordova-lib/src/plugman/platforms/ios');
-      projectFile = platform_ios.parse(iosPlatformPath());
-    } catch (e) {
-      // try cordova 7.0 structure
-      var iosPlatformApi = require(path.join(iosPlatformPath(), '/cordova/Api'));
-      var projectFileApi = require(path.join(iosPlatformPath(), '/cordova/lib/projectFile.js'));
-      var locations = (new iosPlatformApi()).locations;
-      projectFile = projectFileApi.parse(locations);
-    }
+      try {
+          // let's try cordova 5.0 structure
+          platform_ios = context.requireCordovaModule('cordova-lib/src/plugman/platforms/ios');
+          projectFile = platform_ios.parseProjectFile(iosPlatformPath());
+      } catch (e) {
+          // Then cordova 7.0
+          var project_files = require('glob').sync(path.join(iosPlatformPath(), '*.xcodeproj', 'project.pbxproj'));
+          
+          if (project_files.length === 0) {
+              throw new Error('does not appear to be an xcode project (no xcode project file)');
+          }
+          
+          var pbxPath = project_files[0];
+          
+          var xcodeproj = require('xcode').project(pbxPath);
+          xcodeproj.parseSync();
+          
+          projectFile = {
+              'xcode': xcodeproj,
+              write: function () {
+                  var fs = require('fs');
+                  
+              var frameworks_file = path.join(iosPlatformPath(), 'frameworks.json');
+              var frameworks = {};
+              try {
+                  frameworks = context.requireCordovaModule(frameworks_file);
+              } catch (e) { }
+              
+              fs.writeFileSync(pbxPath, xcodeproj.writeSync());
+                  if (Object.keys(frameworks).length === 0){
+                      // If there is no framework references remain in the project, just remove this file
+                      require('shelljs').rm('-rf', frameworks_file);
+                      return;
+                  }
+                  fs.writeFileSync(frameworks_file, JSON.stringify(this.frameworks, null, 4));
+              }
+          };
+      }
   }
+  
   return projectFile;
-}
+  } 
 
 /**
  * Remove comments from the file.
