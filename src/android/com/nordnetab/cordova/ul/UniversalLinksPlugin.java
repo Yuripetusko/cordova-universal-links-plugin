@@ -204,7 +204,7 @@ public class UniversalLinksPlugin extends CordovaPlugin {
                     URL resolvedURL = new URL(ucon.getHeaderField("Location"));
                     Uri launchUri = getUriFromUrl(resolvedURL);
 
-                    ULHost host = findHostByUrl(launchUri);
+                    ULHost host = new ULHost(launchUri.getHost(), launchUri.getScheme(), null);
                     if (host == null) {
                         Log.d("UniversalLinks", "Host " + launchUri.getHost() + " is not supported");
                         return;
@@ -226,26 +226,6 @@ public class UniversalLinksPlugin extends CordovaPlugin {
 
         // try to find host in the hosts list from the config.xml
         
-    }
-
-    /**
-     * Find host entry that matches the launch url.
-     *
-     * @param url launch url
-     * @return host entry; <code>null</code> - if none were found
-     */
-    private ULHost findHostByUrl(Uri url) {
-        ULHost host = null;
-        final String launchHost = url.getHost().toLowerCase();
-        for (ULHost supportedHost : supportedHosts) {
-            if (supportedHost.getName().equals(launchHost) ||
-                    supportedHost.getName().startsWith("*.") && launchHost.endsWith(supportedHost.getName().substring(1))) {
-                host = supportedHost;
-                break;
-            }
-        }
-
-        return host;
     }
 
     // endregion
