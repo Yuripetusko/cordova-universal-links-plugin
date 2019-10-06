@@ -215,6 +215,10 @@ public class UniversalLinksPlugin extends CordovaPlugin {
                     tryToConsumeEvent();
                 }
                 catch (MalformedURLException ex) {
+                    Uri launchUri = intent.getData();
+                    ULHost host = new ULHost(launchUri.getHost(), launchUri.getScheme(), null);
+                    storedMessage = new JSMessage(host, launchUri);
+                    tryToConsumeEvent();
                     Log.e("App Link",Log.getStackTraceString(ex));
                 }
                 catch (IOException ex) {
@@ -225,7 +229,7 @@ public class UniversalLinksPlugin extends CordovaPlugin {
 
 
         // try to find host in the hosts list from the config.xml
-        
+
     }
 
     // endregion
